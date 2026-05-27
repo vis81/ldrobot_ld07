@@ -1,13 +1,13 @@
 ldrobot_ld07_node:
   ros__parameters:
     comm:
-      serial_port: '/dev/ttyUSB0'   # override with serial_port launch arg or udev symlink
+      serial_port: '/dev/ld07'       # udev symlink (PICAR2_LD07_0001); fallback: /dev/ttyUSB0
       baudrate: 921600
       timeout_msec: 1000
 
     lidar:
-      frame_id: 'laser_link'
-      topic: '/scan'
+      frame_id: 'ld07_link'
+      topic: '/ld07/scan'
       range_min: 0.005    # 5 mm
       range_max: 0.400    # 400 mm
       angle_min: -0.7854  # -45°, D1 (right edge)
