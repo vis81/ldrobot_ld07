@@ -31,7 +31,7 @@ install(TARGETS ldrobot_ld07_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(DIRECTORY launch params
+install(DIRECTORY launch params config
   DESTINATION share/${PROJECT_NAME}
 )
 
