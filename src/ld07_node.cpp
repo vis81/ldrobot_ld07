@@ -34,10 +34,18 @@ Ld07Node::Ld07Node(const rclcpp::NodeOptions& options)
 
     pub_ = create_publisher<sensor_msgs::msg::LaserScan>(topic_, rclcpp::SensorDataQoS());
 
-    if (!port_.open(port_path, baud)) {
-        RCLCPP_FATAL(get_logger(), "Cannot open serial port '%s': %s",
-                     port_path.c_str(), strerror(errno));
-        throw std::runtime_error("Cannot open serial port: " + port_path);
+    {
+        bool warned = false;
+        while (rclcpp::ok() && !port_.open(port_path, baud)) {
+            if (!warned) {
+                RCLCPP_WARN(get_logger(),
+                    "Cannot open serial port '%s': %s — waiting for device",
+                    port_path.c_str(), strerror(errno));
+                warned = true;
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        if (!port_.isOpen()) return;  // rclcpp shutdown while waiting
     }
     RCLCPP_INFO(get_logger(), "Opened %s at %u baud", port_path.c_str(), baud);
 
