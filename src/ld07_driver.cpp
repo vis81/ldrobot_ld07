@@ -101,6 +101,8 @@ bool Driver::readResponse(SerialPort& port, uint8_t expected_cmd,
 }
 
 bool Driver::initSensor(SerialPort& port, int timeout_ms) {
+    calib_ = Calib{};  // always fetch fresh calibration on (re)init
+
     auto deadline = std::chrono::steady_clock::now()
                   + std::chrono::milliseconds(timeout_ms);
 

@@ -24,8 +24,10 @@ Ld07Node::Ld07Node(const rclcpp::NodeOptions& options)
     declare_parameter("lidar.angle_max",     M_PI_4);
     declare_parameter("lidar.confidence_min", 0);
 
-    const auto port_path = get_parameter("comm.serial_port").as_string();
-    const auto baud      = static_cast<uint32_t>(get_parameter("comm.baudrate").as_int());
+    port_path_ = get_parameter("comm.serial_port").as_string();
+    baud_      = static_cast<uint32_t>(get_parameter("comm.baudrate").as_int());
+    const auto& port_path = port_path_;
+    const auto  baud      = baud_;
     timeout_ms_      = static_cast<int>(get_parameter("comm.timeout_msec").as_int());
     frame_id_        = get_parameter("lidar.frame_id").as_string();
     topic_           = get_parameter("lidar.topic").as_string();
@@ -117,16 +119,36 @@ bool Ld07Node::waitForPort(const std::string& path, uint32_t baud) {
     return port_.isOpen();
 }
 
+void Ld07Node::reconnect() {
+    driver_.sendCommand(port_, CMD_DIST_STOP);  // best-effort — port may already be dead
+    port_.close();
+
+    if (!waitForPort(port_path_, baud_)) return;  // rclcpp shutdown
+    RCLCPP_INFO(get_logger(), "Reconnected to %s", port_path_.c_str());
+
+    if (driver_.initSensor(port_, timeout_ms_)) {
+        const auto& c = driver_.calib();
+        RCLCPP_INFO(get_logger(),
+            "Calibration received: k0=%.4f k1=%.4f b0=%.4f b1=%.4f",
+            c.k0, c.k1, c.b0, c.b1);
+    } else {
+        RCLCPP_WARN(get_logger(),
+            "Calibration not received — falling back to linear angle mapping");
+    }
+    driver_.sendCommand(port_, CMD_DIST_START);
+}
+
 void Ld07Node::readerThread() {
     Frame frame;
     int consecutive_failures = 0;
 
     while (running_) {
         if (!driver_.readFrame(port_, frame, timeout_ms_)) {
-            ++consecutive_failures;
-            if (consecutive_failures == 5) {
+            if (++consecutive_failures == 5) {
                 RCLCPP_WARN(get_logger(),
-                    "5 consecutive read failures — check sensor connection");
+                    "5 consecutive read failures — device disconnected, reconnecting");
+                reconnect();
+                consecutive_failures = 0;
             }
             continue;
         }

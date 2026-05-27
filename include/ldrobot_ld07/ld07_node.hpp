@@ -21,6 +21,8 @@ public:
 private:
     // Block until the serial port opens or rclcpp shuts down. Returns false on shutdown.
     bool waitForPort(const std::string& path, uint32_t baud);
+    // Close port, wait for device to reappear, re-init sensor, restart streaming.
+    void reconnect();
 
     void readerThread();
     sensor_msgs::msg::LaserScan makeScan(const Frame& frame);
@@ -33,6 +35,8 @@ private:
     std::atomic<bool> running_{false};
 
     // cached parameters
+    std::string port_path_;
+    uint32_t    baud_;
     std::string frame_id_;
     std::string topic_;
     float       range_min_, range_max_;
