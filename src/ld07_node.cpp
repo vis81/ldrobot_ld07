@@ -41,8 +41,18 @@ Ld07Node::Ld07Node(const rclcpp::NodeOptions& options)
     }
     RCLCPP_INFO(get_logger(), "Opened %s at %u baud", port_path.c_str(), baud);
 
+    // Init sequence: CONFIG_ADDR → GET_CALIB → VIDEO_SIZE (required before streaming)
+    if (driver_.initSensor(port_, timeout_ms_)) {
+        const auto& c = driver_.calib();
+        RCLCPP_INFO(get_logger(),
+            "Calibration received: k0=%.4f k1=%.4f b0=%.4f b1=%.4f",
+            c.k0, c.k1, c.b0, c.b1);
+    } else {
+        RCLCPP_WARN(get_logger(),
+            "Calibration not received — falling back to linear angle mapping");
+    }
+
     driver_.sendCommand(port_, CMD_DIST_START);
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));  // let sensor start streaming
 
     running_ = true;
     reader_thread_ = std::thread(&Ld07Node::readerThread, this);
@@ -86,26 +96,54 @@ sensor_msgs::msg::LaserScan Ld07Node::makeScan(const Frame& frame) {
 
     const rclcpp::Time now_t = msg.header.stamp;
     if (first_frame_) {
-        msg.scan_time  = 0.1f;  // placeholder for the first frame
-        first_frame_   = false;
+        msg.scan_time = 0.1f;
+        first_frame_  = false;
     } else {
         msg.scan_time = static_cast<float>((now_t - last_frame_time_).seconds());
     }
-    last_frame_time_    = now_t;
-    msg.time_increment  = msg.scan_time / static_cast<float>(NUM_POINTS - 1);
+    last_frame_time_   = now_t;
+    msg.time_increment = msg.scan_time / static_cast<float>(NUM_POINTS - 1);
 
-    msg.ranges.resize(NUM_POINTS);
-    msg.intensities.resize(NUM_POINTS);
+    msg.ranges.assign(NUM_POINTS, std::numeric_limits<float>::quiet_NaN());
+    msg.intensities.assign(NUM_POINTS, 0.f);
 
-    for (size_t i = 0; i < NUM_POINTS; ++i) {
-        const auto& pt = frame.points[i];
-        const bool valid = !std::isnan(pt.range_m)
-                        && pt.range_m >= range_min_
-                        && pt.range_m <= range_max_
-                        && pt.confidence >= confidence_min_;
-        msg.ranges[i]      = valid ? pt.range_m
-                                   : std::numeric_limits<float>::quiet_NaN();
-        msg.intensities[i] = static_cast<float>(pt.confidence);
+    if (driver_.calib().valid) {
+        // Perspective-correct: transform each raw measurement to (x,y), scatter into angle bins
+        for (size_t i = 0; i < NUM_POINTS; ++i) {
+            const auto& pt = frame.points[i];
+            if (pt.dist_mm == 0 || pt.confidence < confidence_min_) continue;
+
+            float x_mm, y_mm;
+            if (!driver_.transformPoint(pt.dist_mm, static_cast<int>(i), x_mm, y_mm)) continue;
+
+            const float range = std::hypot(x_mm, y_mm) / 1000.0f;
+            if (range < range_min_ || range > range_max_) continue;
+
+            const float angle = std::atan2(y_mm, x_mm);
+            if (angle < angle_min_ || angle > angle_max_) continue;
+
+            const int bin = static_cast<int>(
+                (angle - angle_min_) / msg.angle_increment + 0.5f);
+            if (bin < 0 || bin >= static_cast<int>(NUM_POINTS)) continue;
+
+            // Keep nearest point when multiple inputs land in the same bin
+            if (std::isnan(msg.ranges[bin]) || range < msg.ranges[bin]) {
+                msg.ranges[bin]      = range;
+                msg.intensities[bin] = static_cast<float>(pt.confidence);
+            }
+        }
+    } else {
+        // Linear fallback: direct index-to-angle mapping (no calibration)
+        for (size_t i = 0; i < NUM_POINTS; ++i) {
+            const auto& pt = frame.points[i];
+            const float range = static_cast<float>(pt.dist_mm) / 1000.0f;
+            const bool valid  = pt.dist_mm > 0
+                             && range >= range_min_
+                             && range <= range_max_
+                             && pt.confidence >= confidence_min_;
+            msg.ranges[i]      = valid ? range : std::numeric_limits<float>::quiet_NaN();
+            msg.intensities[i] = static_cast<float>(pt.confidence);
+        }
     }
 
     return msg;
