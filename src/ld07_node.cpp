@@ -2,8 +2,11 @@
 
 #include <cmath>
 #include <limits>
+#include <poll.h>
 #include <stdexcept>
+#include <sys/inotify.h>
 #include <thread>
+#include <unistd.h>
 
 namespace ld07 {
 
@@ -34,19 +37,7 @@ Ld07Node::Ld07Node(const rclcpp::NodeOptions& options)
 
     pub_ = create_publisher<sensor_msgs::msg::LaserScan>(topic_, rclcpp::SensorDataQoS());
 
-    {
-        bool warned = false;
-        while (rclcpp::ok() && !port_.open(port_path, baud)) {
-            if (!warned) {
-                RCLCPP_WARN(get_logger(),
-                    "Cannot open serial port '%s': %s — waiting for device",
-                    port_path.c_str(), strerror(errno));
-                warned = true;
-            }
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-        if (!port_.isOpen()) return;  // rclcpp shutdown while waiting
-    }
+    if (!waitForPort(port_path, baud)) return;  // rclcpp shutdown while waiting
     RCLCPP_INFO(get_logger(), "Opened %s at %u baud", port_path.c_str(), baud);
 
     // Init sequence: CONFIG_ADDR → GET_CALIB → VIDEO_SIZE (required before streaming)
@@ -71,6 +62,59 @@ Ld07Node::~Ld07Node() {
     driver_.sendCommand(port_, CMD_DIST_STOP);
     port_.close();   // unblocks the blocking read() in the reader thread
     if (reader_thread_.joinable()) reader_thread_.join();
+}
+
+bool Ld07Node::waitForPort(const std::string& path, uint32_t baud) {
+    if (port_.open(path, baud)) return true;
+
+    RCLCPP_WARN(get_logger(), "Cannot open '%s': %s — waiting for device",
+                path.c_str(), strerror(errno));
+
+    // Watch the containing directory for device node creation.
+    // Set up before the retry loop to close the race where the device appears
+    // between the initial open() failure and the watch setup.
+    const auto slash = path.rfind('/');
+    const std::string dir = (slash != std::string::npos) ? path.substr(0, slash) : ".";
+    const std::string dev = (slash != std::string::npos) ? path.substr(slash + 1) : path;
+
+    int ifd = inotify_init1(IN_CLOEXEC | IN_NONBLOCK);
+    if (ifd >= 0) inotify_add_watch(ifd, dir.c_str(), IN_CREATE);
+
+    while (rclcpp::ok() && !port_.open(path, baud)) {
+        if (ifd < 0) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            continue;
+        }
+        // inotify is an early wakeup; port_.open() is retried on every iteration
+        // regardless (handles existing-but-not-yet-ready devices on startup).
+        struct pollfd pfd{ifd, POLLIN, 0};
+        poll(&pfd, 1, 1000);  // up to 1 s; woken early by device creation event
+
+        if (!(pfd.revents & POLLIN)) continue;
+
+        alignas(inotify_event) char buf[4096];
+        ssize_t n = ::read(ifd, buf, sizeof(buf));
+        if (n <= 0) continue;
+
+        bool matched = false;
+        for (const char* p = buf; p < buf + n; ) {
+            const auto* ev = reinterpret_cast<const inotify_event*>(p);
+            if ((ev->mask & IN_CREATE) && ev->len > 0 && dev == ev->name) {
+                matched = true;
+                break;
+            }
+            p += sizeof(inotify_event) + ev->len;
+        }
+        if (!matched) continue;  // unrelated device — keep waiting, don't skip the 1 s
+
+        // Give udev a moment to finish configuring the new device node
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        // Outer while condition retries port_.open(); if udev isn't done yet,
+        // the next 1 s timeout will catch it.
+    }
+
+    if (ifd >= 0) ::close(ifd);
+    return port_.isOpen();
 }
 
 void Ld07Node::readerThread() {

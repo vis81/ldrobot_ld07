@@ -19,6 +19,9 @@ public:
     int serialFd() const { return port_.fd(); }
 
 private:
+    // Block until the serial port opens or rclcpp shuts down. Returns false on shutdown.
+    bool waitForPort(const std::string& path, uint32_t baud);
+
     void readerThread();
     sensor_msgs::msg::LaserScan makeScan(const Frame& frame);
 
