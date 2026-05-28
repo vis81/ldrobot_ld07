@@ -1,5 +1,6 @@
 #include "ldrobot_ld07/ld07_node.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <poll.h>
@@ -219,6 +220,9 @@ sensor_msgs::msg::LaserScan Ld07Node::makeScan(const Frame& frame) {
             msg.intensities[i] = static_cast<float>(pt.confidence);
         }
     }
+
+    std::reverse(msg.ranges.begin(),      msg.ranges.end());
+    std::reverse(msg.intensities.begin(), msg.intensities.end());
 
     return msg;
 }

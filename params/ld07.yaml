@@ -9,7 +9,7 @@ ldrobot_ld07_node:
       frame_id: 'ld07_link'
       topic: '/ld07/scan'
       range_min: 0.005    # 5 mm
-      range_max: 0.200    # 200 mm — sensor points down; floor filtered beyond this
+      range_max: 0.170    # 170 mm — sensor points down; floor filtered beyond this
       angle_min: -0.7854  # -45°, D1 (right edge)
       angle_max:  0.7854  # +45°, D160 (left edge)
       confidence_min: 0   # 0 = publish all points; raise to suppress noise
