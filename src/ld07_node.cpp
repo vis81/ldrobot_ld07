@@ -37,7 +37,7 @@ Ld07Node::Ld07Node(const rclcpp::NodeOptions& options)
     angle_max_       = static_cast<float>(get_parameter("lidar.angle_max").as_double());
     confidence_min_  = static_cast<uint8_t>(get_parameter("lidar.confidence_min").as_int());
 
-    pub_ = create_publisher<sensor_msgs::msg::LaserScan>(topic_, rclcpp::SensorDataQoS());
+    pub_ = create_publisher<sensor_msgs::msg::LaserScan>(topic_, rclcpp::QoS(10));
 
     if (!waitForPort(port_path, baud)) return;  // rclcpp shutdown while waiting
     RCLCPP_INFO(get_logger(), "Opened %s at %u baud", port_path.c_str(), baud);
