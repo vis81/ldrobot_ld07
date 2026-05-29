@@ -42,6 +42,7 @@ private:
     float       range_min_, range_max_;
     float       angle_min_, angle_max_;
     uint8_t     confidence_min_;
+    int64_t     stamp_offset_ns_;
     int         timeout_ms_;
 
     rclcpp::Time last_frame_time_;

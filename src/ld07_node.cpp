@@ -24,6 +24,7 @@ Ld07Node::Ld07Node(const rclcpp::NodeOptions& options)
     declare_parameter("lidar.angle_min",    -M_PI_4);
     declare_parameter("lidar.angle_max",     M_PI_4);
     declare_parameter("lidar.confidence_min", 0);
+    declare_parameter("lidar.stamp_offset_sec", 0.05);
 
     port_path_ = get_parameter("comm.serial_port").as_string();
     baud_      = static_cast<uint32_t>(get_parameter("comm.baudrate").as_int());
@@ -36,7 +37,9 @@ Ld07Node::Ld07Node(const rclcpp::NodeOptions& options)
     range_max_       = static_cast<float>(get_parameter("lidar.range_max").as_double());
     angle_min_       = static_cast<float>(get_parameter("lidar.angle_min").as_double());
     angle_max_       = static_cast<float>(get_parameter("lidar.angle_max").as_double());
-    confidence_min_  = static_cast<uint8_t>(get_parameter("lidar.confidence_min").as_int());
+    confidence_min_   = static_cast<uint8_t>(get_parameter("lidar.confidence_min").as_int());
+    stamp_offset_ns_  = static_cast<int64_t>(
+        get_parameter("lidar.stamp_offset_sec").as_double() * 1e9);
 
     pub_ = create_publisher<sensor_msgs::msg::LaserScan>(topic_, rclcpp::QoS(10));
 
@@ -160,7 +163,7 @@ void Ld07Node::readerThread() {
 
 sensor_msgs::msg::LaserScan Ld07Node::makeScan(const Frame& frame) {
     sensor_msgs::msg::LaserScan msg;
-    msg.header.stamp    = now();
+    msg.header.stamp    = rclcpp::Time(now().nanoseconds() - stamp_offset_ns_);
     msg.header.frame_id = frame_id_;
 
     msg.angle_min       = angle_min_;
