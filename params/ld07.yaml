@@ -13,3 +13,4 @@ ldrobot_ld07_node:
       angle_min: -0.7330  # -42°, trims self-reflection artifact at -43°–44° (D160, left edge)
       angle_max:  0.7854  # +45°, D1 (right edge)
       confidence_min: 5   # filters low-confidence ghost returns
+      stamp_offset_sec: 0.05  # back-dates stamp to avoid TF future-extrapolation over LAN
