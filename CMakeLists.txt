@@ -15,13 +15,15 @@ find_package(sensor_msgs REQUIRED)
 
 add_executable(ldrobot_ld07_node
   src/serial_port.cpp
-  src/ld07_driver.cpp
+  src/trnet.cpp
+  src/rtrnet.cpp
   src/ld07_node.cpp
   src/main.cpp
 )
 
 target_include_directories(ldrobot_ld07_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/ldrobot_ld07>
   $<INSTALL_INTERFACE:include>
 )
 

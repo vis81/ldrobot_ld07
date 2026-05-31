@@ -84,4 +84,22 @@ bool SerialPort::writeBytes(const uint8_t* buf, size_t len) {
     return ::write(fd_, buf, len) == static_cast<ssize_t>(len);
 }
 
+int SerialPort::readSome(uint8_t* buf, size_t max_len, int timeout_ms) {
+    if (fd_ < 0 || max_len == 0) return -1;
+
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(fd_, &fds);
+    struct timeval tv{timeout_ms / 1000, (timeout_ms % 1000) * 1000};
+
+    int r = ::select(fd_ + 1, &fds, nullptr, nullptr, &tv);
+    if (r < 0) return (errno == EINTR) ? 0 : -1;
+    if (r == 0) return 0;  // timeout
+
+    ssize_t n = ::read(fd_, buf, max_len);
+    if (n < 0) return (errno == EINTR) ? 0 : -1;
+    if (n == 0) return -1;  // EOF — device disconnected
+    return static_cast<int>(n);
+}
+
 }  // namespace ld07
