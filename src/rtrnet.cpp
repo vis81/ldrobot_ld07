@@ -196,6 +196,27 @@ void RTRNet::ToLaserscan(const std::vector<PointData>& src)
         }
     }
 
+    // Suppress isolated ghost returns: require >= min_neighbors_ valid bins
+    // within ±neighbor_window_ of each valid bin.
+    if (neighbor_window_ > 0 && min_neighbors_ > 0) {
+        std::vector<bool> keep(kBins, true);
+        for (int i = 0; i < kBins; ++i) {
+            if (std::isnan(output_.ranges[i])) continue;
+            int valid = 0;
+            for (int j = i - neighbor_window_; j <= i + neighbor_window_; ++j) {
+                if (j == i || j < 0 || j >= kBins) continue;
+                if (!std::isnan(output_.ranges[j])) ++valid;
+            }
+            if (valid < min_neighbors_) keep[i] = false;
+        }
+        for (int i = 0; i < kBins; ++i) {
+            if (!keep[i]) {
+                output_.ranges[i]      = std::numeric_limits<float>::quiet_NaN();
+                output_.intensities[i] = 0.0f;
+            }
+        }
+    }
+
     std::reverse(output_.ranges.begin(),      output_.ranges.end());
     std::reverse(output_.intensities.begin(), output_.intensities.end());
 }

@@ -14,3 +14,5 @@ ldrobot_ld07_node:
       angle_max:  0.7854  # +45°, D1 (right edge)
       confidence_min: 5   # filters low-confidence ghost returns
       stamp_offset_sec: 0.05  # back-dates stamp to avoid TF future-extrapolation over LAN
+      neighbor_window: 2  # check ±N bins for neighbor consistency
+      min_neighbors: 2    # require ≥N valid neighbors; filters 1- and 2-point ghost clusters

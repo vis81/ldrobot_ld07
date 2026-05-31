@@ -49,6 +49,12 @@ public:
                    float angle_min, float angle_max,
                    float range_min, float range_max,
                    uint8_t confidence_min = 0);
+    // Filter isolated ghost returns: keep a bin only when >= min_neighbors valid
+    // bins exist within ±neighbor_window. Default: filter 1- and 2-point clusters.
+    void SetNeighborFilter(int neighbor_window, int min_neighbors) {
+        neighbor_window_ = neighbor_window;
+        min_neighbors_   = min_neighbors;
+    }
     void SetStamp(const rclcpp::Time& t) { stamp_ = t; }
 
 private:
@@ -72,4 +78,6 @@ private:
     float   range_min_{0.005f};
     float   range_max_{0.400f};
     uint8_t confidence_min_{0};
+    int     neighbor_window_{2};
+    int     min_neighbors_{2};
 };

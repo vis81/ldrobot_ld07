@@ -21,8 +21,10 @@ Ld07Node::Ld07Node(const rclcpp::NodeOptions& options)
     declare_parameter("lidar.range_max",       0.400);
     declare_parameter("lidar.angle_min",      -0.7330);
     declare_parameter("lidar.angle_max",       0.7854);
-    declare_parameter("lidar.confidence_min",  0);
+    declare_parameter("lidar.confidence_min",   0);
     declare_parameter("lidar.stamp_offset_sec", 0.05);
+    declare_parameter("lidar.neighbor_window",  2);
+    declare_parameter("lidar.min_neighbors",    2);
 
     port_path_  = get_parameter("comm.serial_port").as_string();
     baud_       = static_cast<uint32_t>(get_parameter("comm.baudrate").as_int());
@@ -37,6 +39,10 @@ Ld07Node::Ld07Node(const rclcpp::NodeOptions& options)
         static_cast<float>(get_parameter("lidar.range_min").as_double()),
         static_cast<float>(get_parameter("lidar.range_max").as_double()),
         static_cast<uint8_t>(get_parameter("lidar.confidence_min").as_int())
+    );
+    lidar_.SetNeighborFilter(
+        static_cast<int>(get_parameter("lidar.neighbor_window").as_int()),
+        static_cast<int>(get_parameter("lidar.min_neighbors").as_int())
     );
 
     pub_ = create_publisher<sensor_msgs::msg::LaserScan>(
