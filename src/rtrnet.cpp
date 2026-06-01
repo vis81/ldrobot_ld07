@@ -58,7 +58,7 @@ bool RTRNet::UnpackData(const uint8_t* data, uint32_t len)
         if (!t.FindLeadingCode(data_tmp_.data() + i)) { ++i; continue; }
 
         const TRData* tr_data = t.Unpack(data_tmp_.data() + i,
-                                         data_tmp_.size() - i - 4);
+                                         data_tmp_.size() - i);
         if (tr_data == nullptr) { ++i; continue; }
 
         switch (tr_data->pack_id) {
